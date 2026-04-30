@@ -1,0 +1,19 @@
+# AI-Agent-Doc-Platform configuration
+# All values here can be overridden by environment variables.
+
+openai:
+  # model: the OpenAI model to use for all agents
+  model: "gpt-4o-mini"
+  # temperature: controls randomness (0.0 = deterministic, 1.0 = very creative)
+  temperature: 0.7
+  # max_tokens: maximum tokens per LLM response
+  max_tokens: 2048
+
+pipeline:
+  # doc_type: default document type (report | proposal | summary)
+  doc_type: "report"
+  # output_format: default output format (markdown | html | plain)
+  output_format: "markdown"
+
+logging:
+  level: "INFO"
