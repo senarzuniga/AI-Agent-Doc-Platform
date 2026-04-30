@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from dotenv import load_dotenv
@@ -17,6 +16,7 @@ from agents.review_agent import ReviewAgent
 load_dotenv()
 
 _CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
+_PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 
 
 def _load_config() -> dict:
@@ -40,17 +40,26 @@ def _agent_kwargs(config: dict, agent_key: str) -> dict:
     }
 
 
+def _output_dir(config: dict) -> Path:
+    """Return the absolute output directory, always within the project root."""
+    dir_name = (
+        config.get("app", {}).get("output_dir")
+        or os.getenv("APP_OUTPUT_DIR", "outputs")
+    )
+    # Only accept a simple directory name (no path separators or dot segments)
+    # to prevent path traversal via config/env manipulation.
+    safe_dir = Path(dir_name).name or "outputs"
+    return _PROJECT_ROOT / safe_dir
+
+
 def run(
     prompt: str,
-    output_dir: Optional[str] = None,
     save_output: bool = True,
 ) -> str:
     """Run the full multi-agent document generation pipeline.
 
     Args:
         prompt: The document topic or generation request.
-        output_dir: Directory to save the generated document. Defaults to
-            the value in config.yaml or ``outputs/``.
         save_output: Whether to persist the result to disk.
 
     Returns:
@@ -78,7 +87,7 @@ def run(
             time.sleep(retry_delay)
 
     if save_output:
-        _save_document(prompt, final_document, output_dir, config)
+        _save_document(prompt, final_document, config)
 
     return final_document
 
@@ -86,20 +95,10 @@ def run(
 def _save_document(
     prompt: str,
     document: str,
-    output_dir: Optional[str],
     config: dict,
 ) -> Path:
     """Persist the generated document to disk and return its path."""
-    raw_dir = (
-        output_dir
-        or config.get("app", {}).get("output_dir")
-        or os.getenv("APP_OUTPUT_DIR", "outputs")
-    )
-    # Resolve the path and restrict it to the project root to prevent traversal
-    project_root = Path(__file__).parent.parent.resolve()
-    out_path = (project_root / Path(raw_dir)).resolve()
-    if not str(out_path).startswith(str(project_root)):
-        out_path = project_root / "outputs"
+    out_path = _output_dir(config)
     out_path.mkdir(parents=True, exist_ok=True)
 
     safe_name = "".join(c if c.isalnum() or c in " _-" else "_" for c in prompt[:50])

@@ -134,23 +134,13 @@ class TestReviewAgent:
 
 
 class TestOrchestrator:
-    def test_run_pipeline(self, tmp_path, monkeypatch):
-        # Use a path inside the project root so the path-traversal guard allows it
-        from pathlib import Path
-
-        project_root = Path(__file__).parent.parent.resolve()
-        out_dir = project_root / "outputs" / "test_run"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr(
-            "core.orchestrator._save_document",
-            lambda prompt, doc, output_dir, config: out_dir / "test.md",
-        )
-
+    def test_run_pipeline(self, monkeypatch):
         with (
             patch("agents.base_agent.OpenAI"),
             patch("core.orchestrator.ResearchAgent") as MockResearch,
             patch("core.orchestrator.WritingAgent") as MockWriting,
             patch("core.orchestrator.ReviewAgent") as MockReview,
+            patch("core.orchestrator._save_document") as MockSave,
         ):
             MockResearch.return_value.run.return_value = "research"
             MockWriting.return_value.run.return_value = "draft"
@@ -161,6 +151,7 @@ class TestOrchestrator:
             result = run("test topic", save_output=True)
 
         assert result == "final document"
+        MockSave.assert_called_once()
 
     def test_run_no_save(self):
         with (

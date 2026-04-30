@@ -64,7 +64,7 @@ with st.sidebar:
         "(AI-FACTORY-v2 architecture) to generate professional documents:\n\n"
         "1. 🔍 **Research Agent** — gathers facts & context\n"
         "2. ✍️ **Writing Agent** — drafts the document\n"
-        "3. ✅ **Review Agent** — refines & finalises"
+        "3. ✅ **Review Agent** — refines & finalizes"
     )
 
 # ---------------------------------------------------------------------------
