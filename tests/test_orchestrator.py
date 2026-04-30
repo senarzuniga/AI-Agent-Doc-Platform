@@ -15,7 +15,7 @@ from core.orchestrator import Orchestrator, PipelineResult, run
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
-@pytest.fixture()
+@pytest.fixture(scope="function")
 def mock_openai(monkeypatch):
     """Patch openai.OpenAI so no real API calls are made."""
     mock_response = MagicMock()
@@ -28,7 +28,7 @@ def mock_openai(monkeypatch):
         yield mock_client
 
 
-@pytest.fixture()
+@pytest.fixture(scope="function")
 def orchestrator(mock_openai, tmp_path):
     """Return an Orchestrator backed by a minimal config."""
     config_file = tmp_path / "config.yaml"

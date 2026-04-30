@@ -32,7 +32,7 @@ def _make_mock_client(content: str = "mock output") -> MagicMock:
     return mock_client
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="module", autouse=True)
 def patch_openai():
     mock_client = _make_mock_client()
     with patch("agents.base_agent.openai.OpenAI", return_value=mock_client):
