@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from tenacity import RetryError
 
 # Ensure project root is on sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -169,3 +170,34 @@ class TestOrchestrator:
             result = run("test topic", save_output=False)
 
         assert result == "final"
+
+    def test_retry_logic(self):
+        with (
+            patch("agents.base_agent.OpenAI"),
+            patch("core.orchestrator.ResearchAgent") as MockResearch,
+            patch("core.orchestrator.WritingAgent") as MockWriting,
+            patch("core.orchestrator.ReviewAgent") as MockReview,
+        ):
+            MockResearch.return_value.run.side_effect = [Exception("Transient error"), "research"]
+            MockWriting.return_value.run.return_value = "draft"
+            MockReview.return_value.run.return_value = "final document"
+
+            from core.orchestrator import run
+
+            result = run("test topic", save_output=False)
+
+        assert result == "final document"
+
+    def test_retry_exceeds_attempts(self):
+        with (
+            patch("agents.base_agent.OpenAI"),
+            patch("core.orchestrator.ResearchAgent") as MockResearch,
+            patch("core.orchestrator.WritingAgent") as MockWriting,
+            patch("core.orchestrator.ReviewAgent") as MockReview,
+        ):
+            MockResearch.return_value.run.side_effect = Exception("Persistent error")
+
+            from core.orchestrator import run
+
+            with pytest.raises(RetryError):
+                run("test topic", save_output=False)
