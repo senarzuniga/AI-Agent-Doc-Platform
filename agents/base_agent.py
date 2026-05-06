@@ -9,6 +9,23 @@ from typing import Optional
 from openai import OpenAI
 
 
+_PLACEHOLDER_VALUES = {
+    "",
+    "your_key_here",
+    "your_openai_api_key_here",
+    "changeme",
+    "placeholder",
+}
+
+
+def _first_valid_key(*values: Optional[str]) -> Optional[str]:
+    for value in values:
+        cleaned = (value or "").strip().strip('"').strip("'")
+        if cleaned and cleaned.lower() not in _PLACEHOLDER_VALUES:
+            return cleaned
+    return None
+
+
 class BaseAgent(ABC):
     """Abstract base class for all AI agents in the platform."""
 
@@ -26,7 +43,13 @@ class BaseAgent(ABC):
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature
-        self._client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
+        resolved_key = _first_valid_key(
+            api_key,
+            os.getenv("OPENAI_API_KEY"),
+            os.getenv("OPENAI_KEY"),
+            os.getenv("AZURE_OPENAI_KEY"),
+        )
+        self._client = OpenAI(api_key=resolved_key)
 
     def _chat(self, system_prompt: str, user_prompt: str) -> str:
         """Send a chat completion request and return the response text."""

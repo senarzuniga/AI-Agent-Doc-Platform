@@ -20,10 +20,10 @@ class ResearchAgent(BaseAgent):
     """Gathers research data and context for a document topic."""
 
     def __init__(self, **kwargs) -> None:
+        kwargs.setdefault("temperature", 0.3)
         super().__init__(
             name="Research Agent",
             description="Gathers facts, data, and context for the document topic",
-            temperature=0.3,
             **kwargs,
         )
 

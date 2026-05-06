@@ -1,0 +1,224 @@
+#!/usr/bin/env node
+/* eslint-disable no-console */
+const fs = require('fs');
+const path = require('path');
+
+const DEFAULT_SOURCES = [
+  'C:/Users/Inaki Senar/Documents/GitHub/adaptive-sales-engine',
+  'C:/Users/Inaki Senar/Documents/GitHub/AI-FACTORY-v2',
+];
+
+const KEY_NAME_REGEX = /(API_KEY|API_SECRET|OPENAI_API_KEY|ANTHROPIC_API_KEY|GROQ_API_KEY|COHERE_API_KEY|REPLICATE_API_TOKEN|PINECONE_API_KEY|QDRANT_API_KEY|SUPABASE_KEY|FIREBASE_|AZURE_|AWS_|GOOGLE_|STRIPE_|SENDGRID_|TWILIO_|SLACK_|GITHUB_TOKEN|HUGGINGFACE_|LANGSMITH_|LANGCHAIN_|OPENROUTER|TOGETHER_|MISTRAL|PERPLEXITY|VOYAGE_|UPSTAGE_)/i;
+const ASSIGNMENT_REGEX = /([A-Z0-9_]+)\s*[:=]\s*["']?([^\s"'`#]+)["']?/g;
+
+function parseArgs(argv) {
+  const args = { source: [], output: null, backup: false };
+  for (let i = 2; i < argv.length; i += 1) {
+    const token = argv[i];
+    if (token === '--source') {
+      args.source.push(argv[i + 1]);
+      i += 1;
+    } else if (token === '--output') {
+      args.output = argv[i + 1];
+      i += 1;
+    } else if (token === '--backup') {
+      args.backup = true;
+    }
+  }
+  if (args.source.length === 0) {
+    args.source = [...DEFAULT_SOURCES];
+  }
+  return args;
+}
+
+function maskValue(value) {
+  if (!value) return '***';
+  if (value.length <= 8) return `${value.slice(0, 2)}...${value.slice(-2)}`;
+  return `${value.slice(0, 4)}...${value.slice(-4)}`;
+}
+
+function detectEnvironment(filePath) {
+  const name = filePath.toLowerCase();
+  if (name.includes('production') || name.includes('prod')) return 'production';
+  if (name.includes('development') || name.includes('dev')) return 'development';
+  if (name.includes('staging') || name.includes('stage')) return 'staging';
+  if (name.includes('.env.local')) return 'development';
+  return 'unknown';
+}
+
+function gatherContext(lines, idx) {
+  const out = [];
+  const start = Math.max(0, idx - 2);
+  const end = Math.min(lines.length - 1, idx + 2);
+  for (let i = start; i <= end; i += 1) {
+    const line = lines[i].trim();
+    if (line.startsWith('#') || line.startsWith('//') || line.includes('service') || line.includes('provider')) {
+      out.push(line);
+    }
+  }
+  return out.join(' | ') || 'No nearby usage comments';
+}
+
+function isCandidateFile(filePath, rootPath) {
+  const rel = path.relative(rootPath, filePath).replace(/\\/g, '/');
+  const base = path.basename(filePath);
+  if (['.env', '.env.local', '.env.production', '.env.development', 'secrets.json', 'keys.json', 'credentials.json', 'docker-compose.yml', '.gitlab-ci.yml', 'package.json'].includes(base)) {
+    return true;
+  }
+  if (base.endsWith('.config.js') || base.endsWith('.config.ts')) return true;
+  if (rel.startsWith('config/') || rel.startsWith('src/config/')) return true;
+  if (rel.startsWith('.github/workflows/') && (base.endsWith('.yml') || base.endsWith('.yaml'))) return true;
+  return false;
+}
+
+function walk(rootDir) {
+  const files = [];
+  const stack = [rootDir];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch (_err) {
+      continue;
+    }
+    for (const entry of entries) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (['.git', 'node_modules', '.venv', 'venv', 'dist', 'build', '.next', '.cache'].includes(entry.name)) {
+          continue;
+        }
+        stack.push(fullPath);
+      } else if (entry.isFile()) {
+        files.push(fullPath);
+      }
+    }
+  }
+  return files;
+}
+
+function extractFromFile(filePath, rootPath) {
+  const results = [];
+  let content = '';
+  try {
+    content = fs.readFileSync(filePath, 'utf8');
+  } catch (_err) {
+    return results;
+  }
+
+  const lines = content.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!line || line.trim().startsWith('#')) continue;
+
+    ASSIGNMENT_REGEX.lastIndex = 0;
+    let match;
+    while ((match = ASSIGNMENT_REGEX.exec(line)) !== null) {
+      const keyName = match[1];
+      const keyValue = match[2] || '';
+      if (!KEY_NAME_REGEX.test(keyName)) continue;
+      if (!keyValue || keyValue.toLowerCase() === 'your_key_here' || keyValue.includes('placeholder')) continue;
+
+      results.push({
+        sourceRepo: rootPath,
+        filePath,
+        relativePath: path.relative(rootPath, filePath).replace(/\\/g, '/'),
+        keyName,
+        keyValue,
+        maskedValue: maskValue(keyValue),
+        environment: detectEnvironment(filePath),
+        usageContext: gatherContext(lines, i),
+      });
+    }
+  }
+
+  return results;
+}
+
+function ensureDir(dirPath) {
+  fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function writeMergedEnv(outputPath, records) {
+  const merged = new Map();
+  for (const rec of records) {
+    if (!merged.has(rec.keyName)) {
+      merged.set(rec.keyName, rec.keyValue);
+    }
+  }
+  const lines = ['# Generated by scripts/extract-api-keys-from-repos.js'];
+  for (const [k, v] of merged.entries()) {
+    lines.push(`${k}=${v}`);
+  }
+  fs.writeFileSync(outputPath, `${lines.join('\n')}\n`, 'utf8');
+  return merged.size;
+}
+
+function createBackupIfRequested(shouldBackup, records) {
+  if (!shouldBackup) return null;
+  const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+  const backupDir = path.resolve(process.cwd(), 'backups');
+  ensureDir(backupDir);
+  const filePath = path.join(backupDir, `extracted-keys-${stamp}.json`);
+  const payload = records.map((r) => ({
+    sourceRepo: r.sourceRepo,
+    filePath: r.filePath,
+    keyName: r.keyName,
+    maskedValue: r.maskedValue,
+    environment: r.environment,
+    usageContext: r.usageContext,
+  }));
+  fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
+  return filePath;
+}
+
+function run() {
+  const args = parseArgs(process.argv);
+  const allRecords = [];
+
+  for (const source of args.source) {
+    const absSource = path.resolve(source);
+    if (!fs.existsSync(absSource)) {
+      console.warn(`[WARN] Source repo not found: ${absSource}`);
+      continue;
+    }
+
+    const files = walk(absSource).filter((f) => isCandidateFile(f, absSource));
+    for (const filePath of files) {
+      const records = extractFromFile(filePath, absSource);
+      allRecords.push(...records);
+    }
+  }
+
+  if (allRecords.length === 0) {
+    console.log('[INFO] No API-style keys discovered.');
+    return;
+  }
+
+  console.log(`[INFO] Found ${allRecords.length} candidate key entries.`);
+  for (const rec of allRecords) {
+    console.log(`${rec.keyName}=${rec.maskedValue} | env=${rec.environment} | ${rec.relativePath}`);
+  }
+
+  if (args.output) {
+    const outputPath = path.resolve(args.output);
+    ensureDir(path.dirname(outputPath));
+    const count = writeMergedEnv(outputPath, allRecords);
+    console.log(`[OK] Wrote ${count} merged keys to ${outputPath}`);
+  }
+
+  const backupPath = createBackupIfRequested(args.backup, allRecords);
+  if (backupPath) {
+    console.log(`[OK] Wrote masked backup report to ${backupPath}`);
+  }
+}
+
+if (require.main === module) {
+  run();
+}
+
+module.exports = {
+  parseArgs,
+  maskValue,
+  run,
+};

@@ -21,10 +21,10 @@ class ReviewAgent(BaseAgent):
     """Reviews, improves, and finalizes document quality."""
 
     def __init__(self, **kwargs) -> None:
+        kwargs.setdefault("temperature", 0.4)
         super().__init__(
             name="Review Agent",
             description="Reviews, improves, and finalizes document quality",
-            temperature=0.4,
             **kwargs,
         )
 

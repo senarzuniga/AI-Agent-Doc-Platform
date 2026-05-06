@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    volumes:
+      - type: bind
+        source: C:/Users/Inaki Senar/Documents/GitHub/adaptive-sales-engine/.env
+        target: /source-repos/adaptive-sales-engine/.env
+        read_only: true
+      - type: bind
+        source: C:/Users/Inaki Senar/Documents/GitHub/AI-FACTORY-v2/.env
+        target: /source-repos/ai-factory-v2/.env
+        read_only: true
+      - ./backups:/app/backups
+    environment:
+      NODE_ENV: development
+      WATCH_SOURCE_REPOS: "true"
+    command: npm run dev:with-sync

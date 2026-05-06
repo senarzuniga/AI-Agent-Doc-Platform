@@ -1,0 +1,49 @@
+name: Sync API Keys
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_repo_1:
+        description: Source repository path 1
+        required: false
+        default: C:/Users/Inaki Senar/Documents/GitHub/adaptive-sales-engine
+      source_repo_2:
+        description: Source repository path 2
+        required: false
+        default: C:/Users/Inaki Senar/Documents/GitHub/AI-FACTORY-v2
+      encryption_password:
+        description: Passphrase used for encryption (optional)
+        required: false
+        default: ''
+  push:
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/sync-keys.yml'
+      - 'package.json'
+
+jobs:
+  sync:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Extract keys from repos
+        run: node scripts/extract-api-keys-from-repos.js --source "${{ github.event.inputs.source_repo_1 || 'C:/Users/Inaki Senar/Documents/GitHub/adaptive-sales-engine' }}" --source "${{ github.event.inputs.source_repo_2 || 'C:/Users/Inaki Senar/Documents/GitHub/AI-FACTORY-v2' }}" --output ./.env --backup
+
+      - name: Encrypt keys for storage
+        if: ${{ github.event.inputs.encryption_password != '' }}
+        run: node scripts/encrypt-keys.js --source ./.env --output ./backups/keys-backup-ci.enc --password "${{ github.event.inputs.encryption_password }}"
+
+      - name: Upload encrypted backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-keys-backup
+          path: ./backups/*.enc

@@ -1,0 +1,23 @@
+﻿{
+    "name":  "ai-agent-doc-platform-key-tools",
+    "version":  "1.0.0",
+    "private":  true,
+    "description":  "API key extraction, migration, and validation utilities for AI-Agent-Doc-Platform",
+    "scripts":  {
+                    "init:keys":  "node scripts/extract-api-keys-from-repos.js",
+                    "sync:keys":  "node scripts/migrate-api-keys.js",
+                    "validate:keys":  "node scripts/validate-api-keys.js",
+                    "encrypt:keys":  "node scripts/encrypt-keys.js",
+                    "decrypt:keys":  "node scripts/decrypt-keys.js",
+                    "watch:keys":  "nodemon --watch ../adaptive-sales-engine/.env --watch ../AI-FACTORY-v2/.env --exec \"npm run sync:keys\"",
+                    "dev:with-sync":  "node scripts/dev-sync.js",
+                    "update-key":  "python openai_key_manager.py"
+                },
+    "dependencies":  {
+                         "chokidar":  "^4.0.3",
+                         "dotenv":  "^16.5.0"
+                     },
+    "devDependencies":  {
+                            "nodemon":  "^3.1.10"
+                        }
+}

@@ -21,11 +21,11 @@ class WritingAgent(BaseAgent):
     """Drafts structured, professional document content."""
 
     def __init__(self, **kwargs) -> None:
+        kwargs.setdefault("temperature", 0.7)
+        kwargs.setdefault("max_tokens", 4096)
         super().__init__(
             name="Writing Agent",
             description="Drafts structured, professional document content",
-            temperature=0.7,
-            max_tokens=4096,
             **kwargs,
         )
 

@@ -19,6 +19,29 @@ import yaml  # noqa: E402 — imported after sys.path fix
 from core.orchestrator import run  # noqa: E402
 
 
+_PLACEHOLDER_VALUES = {
+    "",
+    "your_key_here",
+    "your_openai_api_key_here",
+    "changeme",
+    "placeholder",
+}
+
+
+def _resolve_openai_api_key() -> str:
+    """Return the effective OpenAI key, supporting common env aliases."""
+    candidates = [
+        os.getenv("OPENAI_API_KEY"),
+        os.getenv("OPENAI_KEY"),
+        os.getenv("AZURE_OPENAI_KEY"),
+    ]
+    for raw in candidates:
+        candidate = (raw or "").strip().strip('"').strip("'")
+        if candidate and candidate.lower() not in _PLACEHOLDER_VALUES:
+            return candidate
+    return ""
+
+
 # ---------------------------------------------------------------------------
 # Page configuration
 # ---------------------------------------------------------------------------
@@ -50,12 +73,12 @@ with st.sidebar:
     st.title("⚙️ Settings")
     api_key = st.text_input(
         "OpenAI API Key",
-        value=os.getenv("OPENAI_API_KEY", ""),
+        value=_resolve_openai_api_key(),
         type="password",
-        help="Your OpenAI API key. Can also be set via the OPENAI_API_KEY env var.",
+        help="Your OpenAI API key. Can also be set via OPENAI_API_KEY or OPENAI_KEY in .env.",
     )
     if api_key:
-        os.environ["OPENAI_API_KEY"] = api_key
+        os.environ["OPENAI_API_KEY"] = api_key.strip()
 
     st.divider()
     st.markdown("### About")
@@ -93,9 +116,11 @@ generate_btn = st.button("🚀 Generate Document", type="primary", use_container
 if generate_btn:
     if not prompt.strip():
         st.warning("Please enter a document topic or request.")
-    elif not os.getenv("OPENAI_API_KEY"):
+    elif not _resolve_openai_api_key():
         st.error("OpenAI API key is required. Set it in the sidebar or .env file.")
     else:
+        # Normalize alias keys so all downstream code reads OPENAI_API_KEY.
+        os.environ["OPENAI_API_KEY"] = _resolve_openai_api_key()
         with st.spinner("Running multi-agent pipeline… this may take a moment ⏳"):
             try:
                 result = run(prompt.strip(), save_output=save_output)
