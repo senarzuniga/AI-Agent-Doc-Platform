@@ -8,6 +8,7 @@ from pathlib import Path
 
 import yaml
 from dotenv import load_dotenv
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from agents.research_agent import ResearchAgent
 from agents.writing_agent import WritingAgent
@@ -52,6 +53,14 @@ def _output_dir(config: dict) -> Path:
     return _PROJECT_ROOT / safe_dir
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+def _run_agents(prompt: str, research_agent: ResearchAgent, writing_agent: WritingAgent, review_agent: ReviewAgent) -> str:
+    research_results = research_agent.run(prompt)
+    draft = writing_agent.run(prompt, context=research_results)
+    final_document = review_agent.run(prompt, context=draft)
+    return final_document
+
+
 def run(
     prompt: str,
     save_output: bool = True,
@@ -66,25 +75,12 @@ def run(
         The final generated document as a Markdown string.
     """
     config = _load_config()
-    max_retries = config.get("orchestrator", {}).get("max_retries", 3)
-    retry_delay = config.get("orchestrator", {}).get("retry_delay", 2)
 
     research_agent = ResearchAgent(**_agent_kwargs(config, "research"))
     writing_agent = WritingAgent(**_agent_kwargs(config, "writing"))
     review_agent = ReviewAgent(**_agent_kwargs(config, "review"))
 
-    for attempt in range(1, max_retries + 1):
-        try:
-            research_results = research_agent.run(prompt)
-            draft = writing_agent.run(prompt, context=research_results)
-            final_document = review_agent.run(prompt, context=draft)
-            break
-        except Exception as exc:
-            if attempt == max_retries:
-                raise RuntimeError(
-                    f"Pipeline failed after {max_retries} attempts: {exc}"
-                ) from exc
-            time.sleep(retry_delay)
+    final_document = _run_agents(prompt, research_agent, writing_agent, review_agent)
 
     if save_output:
         _save_document(prompt, final_document, config)
