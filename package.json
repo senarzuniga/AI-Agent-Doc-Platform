@@ -1,4 +1,4 @@
-﻿{
+{
     "name":  "ai-agent-doc-platform-key-tools",
     "version":  "1.0.0",
     "private":  true,
@@ -15,7 +15,7 @@
                 },
     "dependencies":  {
                          "chokidar":  "^4.0.3",
-                         "dotenv":  "^16.5.0"
+                         "dotenv":  "^17.4.2"
                      },
     "devDependencies":  {
                             "nodemon":  "^3.1.10"
