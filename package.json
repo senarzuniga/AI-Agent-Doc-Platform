@@ -1,4 +1,4 @@
-﻿{
+{
     "name":  "ai-agent-doc-platform-key-tools",
     "version":  "1.0.0",
     "private":  true,
@@ -14,7 +14,7 @@
                     "update-key":  "python openai_key_manager.py"
                 },
     "dependencies":  {
-                         "chokidar":  "^4.0.3",
+                         "chokidar":  "^5.0.0",
                          "dotenv":  "^16.5.0"
                      },
     "devDependencies":  {
